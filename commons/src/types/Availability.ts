@@ -10,6 +10,8 @@ export interface Manifest extends NylasManifest {
   allow_booking: boolean;
   allow_date_change: boolean;
   attendees_to_show: number;
+  booking_user_email: string;
+  booking_user_token: string;
   busy_color: string;
   calendars: Calendar[];
   capacity: number | null;

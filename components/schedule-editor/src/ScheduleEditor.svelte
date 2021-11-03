@@ -96,127 +96,69 @@
   };
 
   //#region mount and prop initialization
-  let internalProps: Manifest = <any>{};
+  let _this: Manifest = <any>{};
   let manifest: Partial<Manifest> = {};
   onMount(async () => {
     await tick();
     const storeKey = JSON.stringify({ component_id: id, access_token });
     manifest = (await $ManifestStore[storeKey]) || {};
 
-    if (manifest) {
-      setManifestDefaults(manifest);
-    }
-
-    updateInternalProps(
-      buildInternalProps($$props, manifest, defaultValueMap) as Manifest,
-    );
+    _this = buildInternalProps($$props, manifest, defaultValueMap) as Manifest;
+    transformPropertyValues();
   });
 
+  let previousProps = $$props;
   $: {
-    const rebuiltProps = buildInternalProps(
-      $$props,
-      manifest,
-      defaultValueMap,
-    ) as Manifest;
-    if (JSON.stringify(rebuiltProps) !== JSON.stringify(internalProps)) {
-      updateInternalProps(rebuiltProps);
+    if (JSON.stringify(previousProps) !== JSON.stringify($$props)) {
+      _this = buildInternalProps(
+        $$props,
+        manifest,
+        defaultValueMap,
+      ) as Manifest;
+      transformPropertyValues();
     }
+    previousProps = $$props;
   }
 
-  function updateInternalProps(updatedProps: Manifest) {
-    internalProps = updatedProps;
-
-    allow_booking = internalProps.allow_booking;
-    attendees_to_show = internalProps.attendees_to_show;
-    capacity = internalProps.capacity;
-    dates_to_show = internalProps.dates_to_show;
-    email_ids = internalProps.email_ids;
-    end_hour = internalProps.end_hour;
-    event_conferencing = internalProps.event_conferencing;
-    event_description = internalProps.event_description;
-    event_location = internalProps.event_location;
-    event_title = internalProps.event_title;
-    mandate_top_of_hour = internalProps.mandate_top_of_hour;
-    max_bookable_slots = internalProps.max_bookable_slots;
-    max_book_ahead_days = internalProps.max_book_ahead_days;
-    min_book_ahead_days = internalProps.min_book_ahead_days;
-    notification_message = internalProps.notification_message;
-    notification_mode = internalProps.notification_mode;
-    notification_subject = internalProps.notification_subject;
-    open_hours = internalProps.open_hours;
-    partial_bookable_ratio = internalProps.partial_bookable_ratio;
-    recurrence = internalProps.recurrence;
-    recurrence_cadence = internalProps.recurrence_cadence;
-    show_as_week = internalProps.show_as_week;
-    show_hosts = internalProps.show_hosts;
-    show_preview = internalProps.show_preview;
-    show_ticks = internalProps.show_ticks;
-    show_weekends = internalProps.show_weekends;
-    slot_size = internalProps.slot_size;
-    start_date = internalProps.start_date;
-    start_hour = internalProps.start_hour;
-    view_as = internalProps.view_as;
-    timezone = internalProps.timezone;
-  }
-
-  // Manifest properties requiring further manipulation:
-
-  function setManifestDefaults(manifest: Partial<Manifest>) {
-    if (email_ids.length) {
-      emailIDs = email_ids?.join(", ");
-    } else if (manifest.email_ids) {
-      emailIDs = manifest.email_ids?.join(", ");
-    }
-    if (start_date) {
-      startDate = start_date.toLocaleDateString("en-CA");
-    } else if (manifest.start_date) {
-      startDate = manifest.start_date.toLocaleDateString("en-CA");
-    }
-    if (recurrence_cadence) {
-      recurrenceCadence = recurrence_cadence;
-    } else if (manifest.recurrence_cadence) {
-      recurrenceCadence = manifest.recurrence_cadence;
-    }
-  }
+  // Properties requiring further manipulation:
   let emailIDs: string = "";
   let startDate: string = new Date().toLocaleDateString("en-CA");
   let recurrenceCadence: string[] = [];
 
-  $: {
-    internalProps.recurrence_cadence = <any>recurrenceCadence;
+  function transformPropertyValues() {
+    emailIDs = _this.email_ids?.join(", ") ?? "";
+    startDate = _this.start_date?.toLocaleDateString("en-CA");
+    recurrenceCadence = _this.recurrence_cadence;
   }
 
   $: {
-    internalProps.email_ids = parseStringToArray(emailIDs);
+    _this.recurrence_cadence = <any>recurrenceCadence;
   }
 
   $: {
-    internalProps.start_date = new Date(
+    _this.email_ids = parseStringToArray(emailIDs);
+  }
+
+  $: {
+    _this.start_date = new Date(
       new Date(startDate).getTime() -
         new Date(startDate).getTimezoneOffset() * -60000,
     );
-  }
-
-  $: {
-    internalProps.open_hours = open_hours;
   }
   // #endregion mount and prop initialization
 
   function saveProperties() {
     console.log("Saving the following properties:");
-    Object.entries(internalProps).forEach(([k, v]) => {
+    Object.entries(_this).forEach(([k, v]) => {
       console.log(k, v);
     });
   }
 
   // #region unpersisted variables
-  let customize_weekdays: boolean = false;
-  let allow_weekends: boolean = false;
-
   function availabilityChosen(event: any) {
-    open_hours = event.detail.timeSlots.map((slot: TimeSlot) => {
-      let { start_time, end_time } = slot;
-      let openTime = {
+    _this.open_hours = event.detail.timeSlots.map((slot: TimeSlot) => {
+      const { start_time, end_time } = slot;
+      const openTime: any = {
         startHour: start_time.getHours(),
         startMinute: start_time.getMinutes(),
         endHour: end_time.getHours(),
@@ -224,7 +166,7 @@
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
 
-      if (customize_weekdays || allow_weekends) {
+      if (_this.show_as_week || _this.show_weekends) {
         openTime.startWeekday = start_time.getDay();
         openTime.endWeekday = end_time.getDay();
       }
@@ -232,7 +174,7 @@
     });
   }
 
-  // niceDate: shows date rules in a nice string format; selectively includes weekday if customize_weekdays / allow_weekends are set
+  // niceDate: shows date rules in a nice string format; selectively includes weekday if _this.show_as_week /  _this.show_weekends are set
   function niceDate(block: AvailabilityRule) {
     let startMoment = new Date(
       0,
@@ -258,7 +200,7 @@
       hour12: true,
     });
 
-    if ((customize_weekdays || allow_weekends) && block.startWeekday) {
+    if ((_this.show_as_week || _this.show_weekends) && block.startWeekday) {
       let weekday = weekdays[block.startWeekday];
       return `${weekday}: ${startMoment} - ${endMoment}`;
     } else {
@@ -311,19 +253,19 @@
         <div class="contents">
           <label>
             <strong>Event Title</strong>
-            <input type="text" bind:value={internalProps.event_title} />
+            <input type="text" bind:value={_this.event_title} />
           </label>
           <label>
             <strong>Event Description</strong>
-            <input type="text" bind:value={internalProps.event_description} />
+            <input type="text" bind:value={_this.event_description} />
           </label>
           <label>
             <strong>Event Location</strong>
-            <input type="text" bind:value={internalProps.event_location} />
+            <input type="text" bind:value={_this.event_location} />
           </label>
           <label>
             <strong>Event Conferencing</strong>
-            <input type="url" bind:value={internalProps.event_conferencing} />
+            <input type="url" bind:value={_this.event_conferencing} />
           </label>
           <div role="radiogroup" aria-labelledby="show_hosts">
             <strong id="show_hosts">Show meeting hosts to the end-user?</strong>
@@ -332,7 +274,7 @@
                 type="radio"
                 name="show_hosts"
                 value={"show"}
-                bind:group={internalProps.show_hosts}
+                bind:group={_this.show_hosts}
               />
               <span>Show Hosts</span>
             </label>
@@ -341,7 +283,7 @@
                 type="radio"
                 name="show_hosts"
                 value={"hide"}
-                bind:group={internalProps.show_hosts}
+                bind:group={_this.show_hosts}
               />
               <span>Hide Hosts</span>
             </label>
@@ -373,10 +315,10 @@
                 min={0}
                 max={24}
                 step={1}
-                bind:value={internalProps.start_hour}
+                bind:value={_this.start_hour}
               />
             </label>
-            {internalProps.start_hour}:00
+            {_this.start_hour}:00
           </div>
           <div>
             <label>
@@ -386,10 +328,10 @@
                 min={0}
                 max={24}
                 step={1}
-                bind:value={internalProps.end_hour}
+                bind:value={_this.end_hour}
               />
             </label>
-            {internalProps.end_hour}:00
+            {_this.end_hour}:00
           </div>
           <div role="radiogroup" aria-labelledby="slot_size">
             <strong id="slot_size">Timeslot size</strong>
@@ -398,7 +340,7 @@
                 type="radio"
                 name="slot_size"
                 value={15}
-                bind:group={internalProps.slot_size}
+                bind:group={_this.slot_size}
               />
               <span>15 minutes</span>
             </label>
@@ -407,7 +349,7 @@
                 type="radio"
                 name="slot_size"
                 value={30}
-                bind:group={internalProps.slot_size}
+                bind:group={_this.slot_size}
               />
               <span>30 minutes</span>
             </label>
@@ -416,7 +358,7 @@
                 type="radio"
                 name="slot_size"
                 value={60}
-                bind:group={internalProps.slot_size}
+                bind:group={_this.slot_size}
               />
               <span>60 minutes</span>
             </label>
@@ -427,7 +369,7 @@
           </label>
           <label>
             <strong>Time Zone</strong>
-            <select bind:value={internalProps.timezone}>
+            <select bind:value={_this.timezone}>
               {#each timezones.default as timezone}
                 <option value={timezone.tzCode}>{timezone.name}</option>
               {/each}
@@ -441,10 +383,10 @@
                 min={1}
                 max={7}
                 step={1}
-                bind:value={internalProps.dates_to_show}
+                bind:value={_this.dates_to_show}
               />
             </label>
-            {internalProps.dates_to_show}
+            {_this.dates_to_show}
           </div>
           <div role="checkbox" aria-labelledby="show_as_week">
             <strong id="show_as_week">Show as week</strong>
@@ -452,7 +394,7 @@
               <input
                 type="checkbox"
                 name="show_as_week"
-                bind:checked={internalProps.show_as_week}
+                bind:checked={_this.show_as_week}
               />
               Show whole week
             </label>
@@ -463,7 +405,7 @@
               <input
                 type="checkbox"
                 name="show_weekends"
-                bind:checked={internalProps.show_weekends}
+                bind:checked={_this.show_weekends}
               />
               Keep weekends on
             </label>
@@ -478,8 +420,8 @@
               <label>
                 <input
                   type="checkbox"
-                  name="customize_weekdays"
-                  bind:checked={customize_weekdays}
+                  name="_this.show_as_week"
+                  bind:checked={_this.show_as_week}
                 />
                 Customize each weekday
               </label>
@@ -488,8 +430,8 @@
               <label>
                 <input
                   type="checkbox"
-                  name="allow_weekends"
-                  bind:checked={allow_weekends}
+                  name=" _this.show_weekends"
+                  bind:checked={_this.show_weekends}
                 />
                 Allow booking on weekends
               </label>
@@ -498,14 +440,14 @@
               <nylas-availability
                 allow_booking={true}
                 max_bookable_slots={Infinity}
-                show_as_week={customize_weekdays || allow_weekends}
-                show_weekends={allow_weekends}
-                start_hour={internalProps.start_hour}
-                end_hour={internalProps.end_hour}
+                show_as_week={_this.show_as_week || _this.show_weekends}
+                show_weekends={_this.show_weekends}
+                start_hour={_this.start_hour}
+                end_hour={_this.end_hour}
                 allow_date_change={false}
                 partial_bookable_ratio="0"
                 show_header={false}
-                date_format={customize_weekdays || allow_weekends
+                date_format={_this.show_as_week || _this.show_weekends
                   ? "weekday"
                   : "none"}
                 busy_color="#000"
@@ -516,7 +458,7 @@
               />
             </div>
             <ul class="availability">
-              {#each open_hours as availability}
+              {#each _this.open_hours || [] as availability}
                 <li>
                   <span class="date">
                     {niceDate(availability)}
@@ -537,7 +479,7 @@
               <input
                 type="checkbox"
                 name="show_ticks"
-                bind:checked={internalProps.show_ticks}
+                bind:checked={_this.show_ticks}
               />
               Show tick marks on left side
             </label>
@@ -548,7 +490,7 @@
               <input
                 type="radio"
                 name="view_as"
-                bind:group={internalProps.view_as}
+                bind:group={_this.view_as}
                 value="schedule"
               />
               <span>Schedule</span>
@@ -557,7 +499,7 @@
               <input
                 type="radio"
                 name="view_as"
-                bind:group={internalProps.view_as}
+                bind:group={_this.view_as}
                 value="list"
               />
               <span>List</span>
@@ -569,7 +511,7 @@
               type="number"
               min={1}
               max={20}
-              bind:value={internalProps.attendees_to_show}
+              bind:value={_this.attendees_to_show}
             />
           </label>
         </div>
@@ -584,7 +526,7 @@
               <input
                 type="checkbox"
                 name="allow_booking"
-                bind:checked={internalProps.allow_booking}
+                bind:checked={_this.allow_booking}
               />
               Allow bookings to be made
             </label>
@@ -595,7 +537,7 @@
               type="number"
               min={1}
               max={20}
-              bind:value={internalProps.max_bookable_slots}
+              bind:value={_this.max_bookable_slots}
             />
           </label>
           <label>
@@ -605,9 +547,9 @@
               min={0}
               max={1}
               step={0.01}
-              bind:value={internalProps.partial_bookable_ratio}
+              bind:value={_this.partial_bookable_ratio}
             />
-            {Math.floor(internalProps.partial_bookable_ratio * 100)}%
+            {Math.floor(_this.partial_bookable_ratio * 100)}%
           </label>
           <div role="radiogroup" aria-labelledby="recurrence">
             <strong id="recurrence"
@@ -617,7 +559,7 @@
               <input
                 type="radio"
                 name="recurrence"
-                bind:group={internalProps.recurrence}
+                bind:group={_this.recurrence}
                 value="none"
               />
               <span>Don't Repeat Events</span>
@@ -626,7 +568,7 @@
               <input
                 type="radio"
                 name="recurrence"
-                bind:group={internalProps.recurrence}
+                bind:group={_this.recurrence}
                 value="optional"
               />
               <span>Users May Repeat Events</span>
@@ -635,7 +577,7 @@
               <input
                 type="radio"
                 name="recurrence"
-                bind:group={internalProps.recurrence}
+                bind:group={_this.recurrence}
                 value="required"
               />
               <span>Events Always Repeat</span>
@@ -643,7 +585,7 @@
           </div>
           <label>
             <strong>Capacity</strong>
-            <input type="number" min={1} bind:value={internalProps.capacity} />
+            <input type="number" min={1} bind:value={_this.capacity} />
           </label>
           <div role="checkbox" aria-labelledby="allow_booking">
             <strong>Top of the Hour Events</strong>
@@ -651,15 +593,15 @@
               <input
                 type="checkbox"
                 name="mandate_top_of_hour"
-                bind:checked={internalProps.mandate_top_of_hour}
+                bind:checked={_this.mandate_top_of_hour}
               />
               Only allow events to be booked at the Top of the Hour
             </label>
           </div>
-          {#if internalProps.recurrence === "required" || internalProps.recurrence === "optional"}
+          {#if _this.recurrence === "required" || _this.recurrence === "optional"}
             <div role="radiogroup" aria-labelledby="recurrence_cadence">
               <strong id="recurrence_cadence"
-                >How often should events repeat{#if internalProps.recurrence === "optional"},
+                >How often should events repeat{#if _this.recurrence === "optional"},
                   if a user chooses to do so{/if}?</strong
               >
               <label>
@@ -724,7 +666,7 @@
                 type="radio"
                 name="notification_mode"
                 value={NotificationMode.SHOW_MESSAGE}
-                bind:group={internalProps.notification_mode}
+                bind:group={_this.notification_mode}
               />
               <span>Show Message on UI</span>
             </label>
@@ -733,24 +675,18 @@
                 type="radio"
                 name="notification_mode"
                 value={NotificationMode.SEND_MESSAGE}
-                bind:group={internalProps.notification_mode}
+                bind:group={_this.notification_mode}
               />
               <span>Send message via email</span>
             </label>
           </div>
           <label>
             <strong>Notification message</strong>
-            <input
-              type="text"
-              bind:value={internalProps.notification_message}
-            />
+            <input type="text" bind:value={_this.notification_message} />
           </label>
           <label>
             <strong>Notification Subject</strong>
-            <input
-              type="text"
-              bind:value={internalProps.notification_subject}
-            />
+            <input type="text" bind:value={_this.notification_subject} />
           </label>
         </div>
         <button on:click={saveProperties}>Save Editor Options</button>
@@ -761,12 +697,12 @@
       <aside id="preview">
         <h1>Preview</h1>
         <nylas-availability
-          {...internalProps}
+          {..._this}
           capacity={null}
           on:timeSlotChosen={(event) => {
             slots_to_book = event.detail.timeSlots;
           }}
-          calendars={!internalProps.email_ids
+          calendars={!_this.email_ids
             ? [
                 {
                   availability: "busy",
@@ -778,9 +714,9 @@
         />
         <nylas-scheduler
           {slots_to_book}
-          {...internalProps}
+          {..._this}
           capacity={null}
-          calendars={!internalProps.email_ids
+          calendars={!_this.email_ids
             ? [
                 {
                   availability: "busy",

@@ -30,14 +30,13 @@
   // #region props
   export let id: string = "";
   export let access_token: string = "";
-  export let availability_id: string;
-  export let email_ids: string[];
+
   export let booking_label: string;
   export let event_title: string;
   export let event_description: string;
   export let event_location: string;
   export let event_conferencing: string;
-  export let slots_to_book: BookableSlot[] = [];
+  export let slots_to_book: BookableSlot[];
   export let notification_mode: NotificationMode;
   export let notification_message: string;
   export let notification_subject: string;
@@ -55,8 +54,6 @@
 
   //#region mount and prop initialization
   const defaultValueMap = {
-    availability_id: "",
-    email_ids: [],
     booking_label: "Schedule time slots",
     event_title: "Meeting",
     event_description: "",
@@ -70,7 +67,7 @@
     recurrence_cadence: ["none"],
   };
 
-  let internalProps: Manifest = <any>{};
+  let _this: Manifest = <any>{};
   let manifest: Partial<Manifest> = {};
 
   onMount(async () => {
@@ -81,49 +78,33 @@
     });
     manifest = (await $ManifestStore[storeKey]) || {};
 
-    updateInternalProps(
-      buildInternalProps($$props, manifest, defaultValueMap) as Manifest,
-    );
+    _this = buildInternalProps($$props, manifest, defaultValueMap) as Manifest;
   });
 
+  let previousProps = $$props;
   $: {
-    const rebuiltProps = buildInternalProps(
-      $$props,
-      manifest,
-      defaultValueMap,
-    ) as Manifest;
-    if (JSON.stringify(rebuiltProps) !== JSON.stringify(internalProps)) {
-      updateInternalProps(rebuiltProps);
+    if (
+      JSON.stringify(previousProps) !== JSON.stringify($$props) ||
+      Object.keys($$props).length === 0
+    ) {
+      _this = buildInternalProps(
+        $$props,
+        manifest,
+        defaultValueMap,
+      ) as Manifest;
     }
-  }
-
-  function updateInternalProps(updatedProps: Manifest) {
-    internalProps = updatedProps;
-
-    availability_id = internalProps.availability_id;
-    email_ids = internalProps.email_ids;
-    booking_label = internalProps.booking_label;
-    event_title = internalProps.event_title;
-    event_description = internalProps.event_description;
-    event_location = internalProps.event_location;
-    event_conferencing = internalProps.event_conferencing;
-    slots_to_book = internalProps.slots_to_book;
-    notification_mode = internalProps.notification_mode;
-    notification_message = internalProps.notification_message;
-    notification_subject = internalProps.notification_subject;
-    recurrence = internalProps.recurrence;
-    recurrence_cadence = internalProps.recurrence_cadence;
-    recurrence_expiry = internalProps.recurrence_expiry;
+    previousProps = $$props;
   }
 
   const dispatchEvent = getEventDispatcher(get_current_component());
   // #endregion mount and prop initialization
 
-  let show_success_notification = false;
-  $: slotsToBook = slots_to_book.map((slot) => {
+  let showSuccessNotification = false;
+
+  $: slotsToBook = _this.slots_to_book.map((slot) => {
     if (!slot.recurrence_cadence) {
-      if (recurrence === "required") {
-        slot.recurrence_cadence = recurrence_cadence[0];
+      if (_this.recurrence === "required") {
+        slot.recurrence_cadence = _this.recurrence_cadence[0];
       } else {
         slot.recurrence_cadence = "none";
       }
@@ -134,26 +115,26 @@
     return slot;
   });
   $: if (slotsToBook.length) {
-    show_success_notification = false;
+    showSuccessNotification = false;
   }
 
   async function bookTimeSlots(events: BookableSlot[]) {
     const bookings = events.map(async (event) => {
       let postableEvent: Partial<TimespanEvent> = {
-        title: event_title,
-        description: event_description,
-        location: event_location,
-        conferencing: event_conferencing
+        title: _this.event_title,
+        description: _this.event_description,
+        location: _this.event_location,
+        conferencing: _this.event_conferencing
           ? {
               provider: "Zoom Meeting", // TODO: make this dynamic
               details: {
-                url: event_conferencing,
+                url: _this.event_conferencing,
               },
             }
           : undefined,
-        participants: event.available_calendars.map((c) => {
+        participants: event.available_calendars.map((calendar) => {
           return {
-            email: c,
+            email: calendar,
           };
         }),
         calendar_id: event.calendar_id,
@@ -180,7 +161,7 @@
         if (typeof event.recurrence_expiry === "string") {
           event.recurrence_expiry = new Date(event.recurrence_expiry as string);
         }
-        const expiry = recurrence_expiry || event.recurrence_expiry;
+        const expiry = _this.recurrence_expiry || event.recurrence_expiry;
         const expiryInt = Number.parseInt(<string>expiry);
 
         if (!isNaN(expiryInt)) {
@@ -208,7 +189,7 @@
 
     dispatchEvent("bookedEvents", {});
 
-    if (notification_mode === NotificationMode.SEND_MESSAGE) {
+    if (_this.notification_mode === NotificationMode.SEND_MESSAGE) {
       eventBookings.map((event, i) => {
         console.log(`event ${i}`, event);
         const event_participants = event.participants?.map((participant) => {
@@ -220,15 +201,14 @@
         if (event_participants) {
           sendMessage(id, {
             to: event_participants,
-            body: `${notification_message}`,
-            subject: `${notification_subject}`,
+            body: `${_this.notification_message}`,
+            subject: `${_this.notification_subject}`,
           });
         }
       });
-    } else if (notification_mode === NotificationMode.SHOW_MESSAGE) {
-      show_success_notification = true;
+    } else if (_this.notification_mode === NotificationMode.SHOW_MESSAGE) {
+      showSuccessNotification = true;
     }
-    availability_id = availability_id;
   }
 </script>
 
@@ -355,7 +335,7 @@
       <ul class="timeslots">
         {#each slotsToBook as timeSlot}
           <li>
-            <h3>{event_title}: {event_description}</h3>
+            <h3>{_this.event_title}: {_this.event_description}</h3>
             <span class="time"
               >{timeSlot.start_time.toLocaleTimeString([], {
                 timeStyle: "short",
@@ -370,9 +350,9 @@
                 dateStyle: "full",
               })}</span
             >
-            {#if recurrence !== "none"}
+            {#if _this.recurrence !== "none"}
               <footer>
-                {#if recurrence === "optional"}
+                {#if _this.recurrence === "optional"}
                   <strong>How often should this event repeat?</strong>
                   <div class="cadences">
                     <label
@@ -385,7 +365,7 @@
                       />
                       <span>never</span>
                     </label>
-                    {#each recurrence_cadence as cadence}
+                    {#each _this.recurrence_cadence as cadence}
                       <label
                         class:checked={timeSlot.recurrence_cadence === cadence}
                       >
@@ -398,10 +378,10 @@
                       </label>
                     {/each}
                   </div>
-                {:else if recurrence === "required"}
+                {:else if _this.recurrence === "required"}
                   <strong>Repeating {timeSlot.recurrence_cadence}</strong>
                 {/if}
-                {#if timeSlot.recurrence_cadence !== "none" && !recurrence_expiry}
+                {#if timeSlot.recurrence_cadence !== "none" && !_this.recurrence_expiry}
                   <strong>Ends</strong>
                   <div class="expiry">
                     <label class:checked={timeSlot.expirySelection === "none"}>
@@ -454,7 +434,7 @@
         {/each}
       </ul>
       <button class="book" on:click={() => bookTimeSlots(slotsToBook)}
-        >{booking_label}</button
+        >{_this.booking_label}</button
       >
     {:else}
       <p>
@@ -462,8 +442,8 @@
         before you book)
       </p>
     {/if}
-    {#if show_success_notification}
-      <p>{notification_message}</p>
+    {#if showSuccessNotification}
+      <p>{_this.notification_message}</p>
     {/if}
   </section>
 </main>

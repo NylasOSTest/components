@@ -30,21 +30,14 @@ export function debounce(
 }
 
 export function buildInternalProps<T extends Manifest>(
-  properties: any,
+  properties: Partial<T>,
   manifest: Manifest,
-  defaultValueMap: Record<string, any>,
-): T {
-  return new Proxy(properties, {
-    get: (properties, name: keyof Manifest | "toJSON" | "toString") => {
+  defaultValueMap: Partial<T>,
+): Partial<T> {
+  return new Proxy(defaultValueMap, {
+    get: (target, name: keyof Manifest | "toJSON" | "toString") => {
       if (name === "toString" || name === "toJSON") {
-        return () => JSON.stringify(properties);
-      }
-
-      if (Reflect.get(properties, name) !== undefined) {
-        return getPropertyValue(
-          Reflect.get(properties, name),
-          defaultValueMap[name],
-        );
+        return () => JSON.stringify(target);
       }
 
       if (name in properties) {
@@ -52,21 +45,28 @@ export function buildInternalProps<T extends Manifest>(
       }
 
       if (manifest && name in manifest) {
+        return getPropertyValue(manifest[name], defaultValueMap[name]);
+      }
+
+      if (Reflect.get(target, name) !== undefined) {
         return getPropertyValue(
-          manifest[<keyof Manifest>name],
+          Reflect.get(target, name),
           defaultValueMap[name],
         );
       }
-      return defaultValueMap[name] ?? null;
+      return null;
     },
   });
 }
 
 export function getPropertyValue<T>(propValue: any, defaultTo: T): T {
   if (propValue) {
-    return typeof defaultTo === "boolean"
-      ? (parseBoolean(propValue) as any)
-      : propValue;
+    if (typeof defaultTo === "boolean") {
+      return parseBoolean(propValue) as any;
+    }
+    if (typeof defaultTo === "number") {
+      return Number(propValue) as any;
+    }
   }
 
   return propValue === undefined ? defaultTo ?? null : propValue;
