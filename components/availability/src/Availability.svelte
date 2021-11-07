@@ -248,12 +248,6 @@
     calendarID = calendarsList?.find((cal) => cal.is_primary)?.id || "";
   });
 
-  const recalibratePositions = (ref: Array<HTMLElement | null>) =>
-    ref.reduce<Record<string, DOMRect>>((allPositions, currentSlot, i) => {
-      if (currentSlot) allPositions[i] = currentSlot.getBoundingClientRect();
-      return allPositions;
-    }, {});
-
   let previousProps = $$props;
   $: {
     if (
@@ -269,12 +263,30 @@
     previousProps = $$props;
   }
 
+  function recalibratePositions(ref: HTMLElement[]) {
+    if (!ref) {
+      return {};
+    }
+
+    return ref.reduce<Record<string, DOMRect>>(
+      (allPositions, currentSlot, i) => {
+        if (currentSlot) {
+          allPositions[i] = currentSlot.getBoundingClientRect();
+        }
+        return allPositions;
+      },
+      {},
+    );
+  }
+
   afterUpdate(() => {
     if (shouldUpdateSlotPositions) {
-      slotYPositions = recalibratePositions(Object.values(slotRef)[0]);
+      slotYPositions = recalibratePositions(
+        <HTMLElement[]>Object.values(slotRef)[0],
+      );
       shouldUpdateSlotPositions = false;
     }
-    if (shouldUpdateDayPositions) {
+    if (shouldUpdateDayPositions && dayRef) {
       dayXPositions = recalibratePositions(dayRef);
       shouldUpdateDayPositions = false;
     }

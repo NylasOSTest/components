@@ -34,18 +34,10 @@ export function buildInternalProps<T extends Manifest>(
   manifest: Manifest,
   defaultValueMap: Partial<T>,
 ): Partial<T> {
-  return new Proxy(defaultValueMap, {
+  return new Proxy(properties, {
     get: (target, name: keyof Manifest | "toJSON" | "toString") => {
       if (name === "toString" || name === "toJSON") {
         return () => JSON.stringify(target);
-      }
-
-      if (name in properties) {
-        return getPropertyValue(properties[name], defaultValueMap[name]);
-      }
-
-      if (manifest && name in manifest) {
-        return getPropertyValue(manifest[name], defaultValueMap[name]);
       }
 
       if (Reflect.get(target, name) !== undefined) {
@@ -54,7 +46,35 @@ export function buildInternalProps<T extends Manifest>(
           defaultValueMap[name],
         );
       }
-      return null;
+
+      if (manifest && name in manifest) {
+        return getPropertyValue(manifest[name], defaultValueMap[name]);
+      }
+      return defaultValueMap[name];
+    },
+
+    ownKeys: (target) => {
+      const keys = new Set([
+        ...Reflect.ownKeys(target),
+        ...Object.keys(manifest),
+        ...Object.keys(defaultValueMap),
+      ]);
+      return Array.from(keys);
+    },
+
+    getOwnPropertyDescriptor: (target, prop) => {
+      let propDescriptor = Reflect.getOwnPropertyDescriptor(target, prop);
+      if (!propDescriptor) {
+        propDescriptor = (manifest &&
+          Object.getOwnPropertyDescriptor(manifest, prop)) ??
+          (defaultValueMap &&
+            Object.getOwnPropertyDescriptor(defaultValueMap, prop)) ?? {
+            configurable: true,
+            enumerable: true,
+          };
+        Reflect.defineProperty(target, prop, propDescriptor);
+      }
+      return propDescriptor;
     },
   });
 }
@@ -66,6 +86,9 @@ export function getPropertyValue<T>(propValue: any, defaultTo: T): T {
     }
     if (typeof defaultTo === "number") {
       return Number(propValue) as any;
+    }
+    if (defaultTo instanceof Date) {
+      return new Date(propValue) as any;
     }
   }
 

@@ -1,10 +1,12 @@
-import type { HydratedContact } from "@commons/types/Contacts";
 import type {
   AccountOrganizationUnit,
   AccountSyncState,
   EmailUnreadStatus,
   MailboxActions,
 } from "@commons/enums/Nylas";
+import type { HydratedContact } from "@commons/types/Contacts";
+import type { Event } from "@commons/types/Events";
+import type { ReplaceFields } from "./Composer";
 
 export interface CommonQuery {
   component_id: string;
@@ -143,12 +145,15 @@ export interface Manifest {
 
 export interface AgendaProperties extends Manifest {
   allow_date_change: boolean;
+  allowed_dates: Date[] | string;
   allow_event_creation: boolean;
   auto_time_box: boolean;
+  calendar_id: string;
   calendar_ids: string;
   color_by: "event" | "calendar";
   condensed_view: boolean;
   eagerly_fetch_events: boolean;
+  events: Event[];
   event_snap_interval: number;
   header_type: "full" | "day" | "none";
   hide_all_day_events: boolean;
@@ -204,6 +209,7 @@ export interface ComposerProperties extends Manifest {
   show_bcc_button?: boolean;
   show_attachment_button?: boolean;
   show_editor_toolbar?: boolean;
+  replace_fields: ReplaceFields[];
   css_url?: string;
 }
 

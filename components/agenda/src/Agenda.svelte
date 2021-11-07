@@ -38,11 +38,11 @@
 
   export let allow_date_change: boolean;
   export let allow_event_creation: boolean;
-  export let allowed_dates: Date[] | string = [];
+  export let allowed_dates: Date[] | string;
   export let auto_time_box: boolean;
-  export let events: Event[] | null = null;
-  export let calendar_id: string = "";
-  export let calendar_ids: any = "";
+  export let events: Event[] | null;
+  export let calendar_id: string;
+  export let calendar_ids: string;
   export let click_action: (
     event: MouseEvent | KeyboardEvent,
     calendarEvent: Event,
@@ -62,29 +62,31 @@
   export let hide_current_time: boolean;
   export let hide_ticks: boolean;
   export let prevent_zoom: boolean;
-  export let selected_date: Date | null = null;
+  export let selected_date: Date;
   export let show_no_events_message: boolean;
   export let theme: string;
 
   const defaultValueMap = {
     allow_date_change: false,
     allow_event_creation: false,
+    allowed_dates: [],
     auto_time_box: false,
+    calendar_id: "",
     calendar_ids: "",
     color_by: "calendar",
     condensed_view: false,
-    header_type: "full",
-    hide_current_time: false,
-    hide_all_day_events: false,
-    prevent_zoom: false,
-    show_no_events_message: false,
     eagerly_fetch_events: true,
     event_snap_interval: 15,
-    theme: "theme-1",
+    header_type: "full",
+    hide_all_day_events: false,
+    hide_current_time: false,
     hide_ticks: false,
+    prevent_zoom: false,
+    show_no_events_message: false,
+    theme: "theme-1",
   };
 
-  let internalProps: AgendaProperties = <any>{};
+  let _this: AgendaProperties = <any>{};
   let now = new Date().getTime();
 
   onMount(async () => {
@@ -93,13 +95,12 @@
     manifest = ((await $ManifestStore[
       JSON.stringify({ component_id: id, access_token })
     ]) || {}) as AgendaProperties;
-    updateInternalProps(
-      buildInternalProps(
-        $$props,
-        manifest,
-        defaultValueMap,
-      ) as AgendaProperties,
-    );
+
+    _this = buildInternalProps(
+      $$props,
+      manifest,
+      defaultValueMap,
+    ) as AgendaProperties;
 
     setInterval(() => {
       now = new Date().getTime();
@@ -110,41 +111,28 @@
 
   $: dispatchEvent("manifestLoaded", manifest);
 
+  let previousProps = $$props;
   $: {
-    const rebuiltProps = buildInternalProps(
-      $$props,
-      manifest,
-      defaultValueMap,
-    ) as AgendaProperties;
-    if (JSON.stringify(rebuiltProps) !== JSON.stringify(internalProps)) {
-      updateInternalProps(rebuiltProps);
+    if (
+      JSON.stringify(previousProps) !== JSON.stringify($$props) ||
+      Object.keys($$props).length === 0
+    ) {
+      _this = buildInternalProps(
+        $$props,
+        manifest,
+        defaultValueMap,
+      ) as AgendaProperties;
     }
-  }
-
-  function updateInternalProps(updatedProps: AgendaProperties) {
-    internalProps = updatedProps;
-
-    allow_date_change = internalProps.allow_date_change;
-    allow_event_creation = internalProps.allow_event_creation;
-    auto_time_box = internalProps.auto_time_box;
-    calendar_ids = internalProps.calendar_ids;
-    color_by = internalProps.color_by;
-    condensed_view = internalProps.condensed_view;
-    header_type = internalProps.header_type;
-    hide_current_time = internalProps.hide_current_time;
-    hide_all_day_events = internalProps.hide_all_day_events;
-    prevent_zoom = internalProps.prevent_zoom;
-    show_no_events_message = internalProps.show_no_events_message;
-    eagerly_fetch_events = internalProps.eagerly_fetch_events;
-    event_snap_interval = internalProps.event_snap_interval;
-    theme = internalProps.theme;
-    hide_ticks = internalProps.hide_ticks;
+    previousProps = $$props;
   }
 
   let themeUrl: string;
-  $: if (!!theme && (theme.startsWith(".") || theme.startsWith("http"))) {
+  $: if (
+    !!_this.theme &&
+    (_this.theme.startsWith(".") || _this.theme.startsWith("http"))
+  ) {
     // If the theme is a file path or a URL
-    themeUrl = theme;
+    themeUrl = _this.theme;
   }
 
   $: click_default = typeof click_action === "function" ? "none" : "expand";
@@ -159,36 +147,42 @@
 
   // #region time constants
   let selectedDate: Date;
-  $: selectedDate = (() => {
-    if (selected_date) {
-      const date = convertToUTC(new Date(selected_date));
+  $: selectedDate = getSelectedDate();
+
+  function getSelectedDate() {
+    if (_this.selected_date) {
+      const date = convertToUTC(new Date(_this.selected_date));
       date.setHours(0, 0, 0, 0);
       return date;
-    } else if (allowedDates.length) {
+    } else if (allowedDates?.length) {
       return allowedDates[0];
     } else {
       const date = new Date();
       date.setHours(0, 0, 0, 0);
       return date;
     }
-  })();
+  }
 
   function convertToUTC(date: Date): Date {
     return new Date(date.getTime() + date.getTimezoneOffset() * 60000);
   }
 
-  $: hideCurrentTime =
-    hide_current_time ||
+  $: _this.hide_current_time =
+    _this.hide_current_time ||
     new Date().toLocaleDateString() != selectedDate.toLocaleDateString();
 
-  $: allowedDates = (() => {
+  $: allowedDates = getAllowedDates();
+
+  function getAllowedDates() {
     let dates: Date[] = [];
 
-    if (allowed_dates && typeof allowed_dates === "string") {
-      if (allowed_dates.includes(",")) {
-        dates = allowed_dates.split(",").map((date): Date => new Date(date));
+    if (_this.allowed_dates && typeof _this.allowed_dates === "string") {
+      if (_this.allowed_dates.includes(",")) {
+        dates = _this.allowed_dates
+          .split(",")
+          .map((date): Date => new Date(date));
       } else {
-        dates = [new Date(allowed_dates)];
+        dates = [new Date(_this.allowed_dates)];
       }
 
       dates = dates.map((date: Date) => {
@@ -197,12 +191,12 @@
       });
     }
 
-    if (allowed_dates && typeof allowed_dates !== "string") {
-      dates = allowed_dates;
+    if (_this.allowed_dates && typeof _this.allowed_dates !== "string") {
+      dates = _this.allowed_dates;
     }
 
     return dates;
-  })();
+  }
 
   // Minutes of the day. Used to display the top and bottom of an agenda.
   export let start_minute = 0;
@@ -211,12 +205,12 @@
   // get events from story by unique ID with Calendar and Date
 
   $: startMinute =
-    auto_time_box && timespanEvents?.length
+    _this.auto_time_box && timespanEvents?.length
       ? getDynamicStartTime(timespanEvents[0])
       : start_minute;
 
   $: endMinute =
-    auto_time_box && timespanEvents?.length
+    _this.auto_time_box && timespanEvents?.length
       ? getDynamicEndTime(timespanEvents[timespanEvents.length - 1])
       : end_minute;
 
@@ -249,11 +243,8 @@
 
   // Accept either comma-separated string, or array.
   $: calendarIDs = (() => {
-    let IDList = internalProps.calendar_ids;
-    if (
-      typeof internalProps.calendar_ids === "string" &&
-      internalProps.calendar_ids.length
-    ) {
+    let IDList = _this.calendar_ids;
+    if (typeof _this.calendar_ids === "string" && _this.calendar_ids.length) {
       IDList = IDList.split(",").map((id: string) => id.trim());
     } else if (calendar_id) {
       IDList = [calendar_id];
@@ -275,7 +266,7 @@
   // Sibling Queries: eagerly fetch the events on the previous and next days,
   // so when the user clicks them, the loading will seem instantaneous.
   let siblingQueries: [EventQuery, EventQuery] | [] = [];
-  $: if (allow_date_change && eagerly_fetch_events && query) {
+  $: if (_this.allow_date_change && _this.eagerly_fetch_events && query) {
     let previousDate;
     let nextDate;
     if (allowedDates.length) {
@@ -332,7 +323,7 @@
   let calendarEvents: Event[] = [];
   $: {
     (async () => {
-      if (events) {
+      if (_this.events) {
         calendarEvents = events as Event[];
       } else {
         calendarEvents = (await EventStore.getEvents(query)) || [];
@@ -361,7 +352,7 @@
     .sort((a, b) => a.when.start_time - b.when.start_time);
 
   // Only fired if no events prop was passed in
-  $: if (!events) {
+  $: if (!_this.events) {
     dispatchEvent("eventsLoaded", calendarEvents);
   }
 
@@ -383,7 +374,7 @@
   $: eventSource =
     Array.isArray(calendarEvents) && calendarEvents.length > 0
       ? calendarEvents
-      : events || [];
+      : _this.events || [];
   // calendarEvents, but with presentational changes made to content.
   // (figure out how far down the page an event needs to be positioned, render links as links, etc.)
   // Goal timing: 0.02ms per event or less
@@ -558,7 +549,7 @@
   let agendaElement: Element;
   let clientHeight: number;
 
-  $: condensed = condensed_view || (clientHeight && clientHeight < 500);
+  $: condensed = _this.condensed_view || (clientHeight && clientHeight < 500);
 
   let scrolling = false;
 
@@ -682,7 +673,7 @@
   function headerMouseUp(event: PointerEvent) {
     if (dragState.held) {
       let distance = event.clientX - dragState.x;
-      if (Math.abs(distance) > MIN_DRAG_DISTANCE && allow_date_change) {
+      if (Math.abs(distance) > MIN_DRAG_DISTANCE && _this.allow_date_change) {
         // you've been moving, not clicking.
         if (distance > 0) {
           goToPreviousDate();
@@ -710,8 +701,8 @@
 
     // Round to nearest snap interval & convert back to relative position
     const snappedStartTime =
-      Math.round(zoomAdjustedStartTime / event_snap_interval) *
-      event_snap_interval;
+      Math.round(zoomAdjustedStartTime / _this.event_snap_interval) *
+      _this.event_snap_interval;
     return (snappedStartTime - startMinute) / timeSpan;
   }
 
@@ -724,8 +715,8 @@
 
     // Round to nearest snap interval & convert back to relative position
     const snappedRunTime =
-      Math.round(zoomAdjustedRunTime / event_snap_interval) *
-      event_snap_interval;
+      Math.round(zoomAdjustedRunTime / _this.event_snap_interval) *
+      _this.event_snap_interval;
     return snappedRunTime / timeSpan;
   }
 
@@ -733,7 +724,7 @@
   let isCreatingNewEvent = false;
   function agendaMouseDown(event: PointerEvent) {
     if (
-      allow_event_creation &&
+      _this.allow_event_creation &&
       !isCreatingNewEvent &&
       Array.isArray(eventSource)
     ) {
@@ -754,7 +745,7 @@
   let negativeDragStartPosition: number | null = null;
   function agendaMouseMove(event: PointerEvent) {
     if (
-      allow_event_creation &&
+      _this.allow_event_creation &&
       dragState.held &&
       !!newEvent &&
       event.clientY > agendaElement.getBoundingClientRect().y
@@ -785,7 +776,7 @@
 
   function agendaMouseUp() {
     if (
-      allow_event_creation &&
+      _this.allow_event_creation &&
       dragState.held &&
       newEvent &&
       newEvent.relativeRunTime > 0
@@ -1328,21 +1319,21 @@
 {/if}
 
 <main
-  class:headless={header_type === "none"}
+  class:headless={_this.header_type === "none"}
   data-cy="nylas-agenda"
-  class={!!themeUrl ? "custom" : internalProps.theme}
+  class={!!themeUrl ? "custom" : _this.theme}
 >
   {#await hydratedEvents}
     (loading events)
-  {:then events}
-    {#if header_type !== "none"}
+  {:then loadedEvents}
+    {#if _this.header_type !== "none"}
       <header
         on:pointerdown={headerMouseDown}
         on:pointermove={headerMouseMove}
         on:pointerup={headerMouseUp}
         on:mouseleave={headerMouseUp}
       >
-        {#if header_type === "full"}
+        {#if _this.header_type === "full"}
           <div class="month">
             <h1>
               {selectedDate.toLocaleString("default", { month: "long" })}
@@ -1354,8 +1345,8 @@
             </h1>
           </div>
         {/if}
-        <div class="day" class:allow_date_change>
-          {#if allow_date_change}
+        <div class="day" class:allow_date_change={_this.allow_date_change}>
+          {#if _this.allow_date_change}
             <button
               disabled={dateIsFirstAllowed}
               on:click={goToPreviousDate}
@@ -1383,7 +1374,7 @@
               })}
             </span>
           </h2>
-          {#if allow_date_change}
+          {#if _this.allow_date_change}
             <button
               disabled={dateIsLastAllowed}
               on:click={goToNextDate}
@@ -1406,8 +1397,8 @@
     {/if}
 
     <div class="all-day">
-      {#if !hide_all_day_events}
-        <ul class="events {theme}">
+      {#if !_this.hide_all_day_events}
+        <ul class="events {_this.theme}">
           {#if Array.isArray(allDayEvents)}
             {#each allDayEvents as event}
               <li
@@ -1452,9 +1443,11 @@
     <div
       class="timespan"
       class:condensed
-      class:hide-ticks={hide_ticks}
+      class:hide-ticks={_this.hide_ticks}
       on:selectstart={(event) => {
-        if (allow_event_creation) event.preventDefault();
+        if (_this.allow_event_creation) {
+          event.preventDefault();
+        }
       }}
     >
       <div class="ticks">
@@ -1465,16 +1458,16 @@
         {/each}
       </div>
       <ul
-        class="events {theme}"
-        class:diff-by-calendar={color_by === "calendar"}
-        class:diff-by-event={color_by === "event"}
+        class="events {_this.theme}"
+        class:diff-by-calendar={_this.color_by === "calendar"}
+        class:diff-by-event={_this.color_by === "event"}
         class:overflowing
         class:scrolling
         style="transform:
       translate({$dampener.x}px,0px)"
         bind:this={agendaElement}
         bind:clientHeight
-        on:wheel={prevent_zoom || condensed ? () => {} : handleWheel}
+        on:wheel={_this.prevent_zoom || condensed ? () => {} : handleWheel}
         on:pointerdown={agendaMouseDown}
         on:pointermove={agendaMouseMove}
         on:pointerup={agendaMouseUp}
@@ -1485,8 +1478,8 @@
             <span style="top: {tick.relativeTickPosition * 100}%" />
           {/each}
         </div>
-        {#if Array.isArray(events)}
-          {#each [...events, newEvent] as event}
+        {#if Array.isArray(loadedEvents)}
+          {#each [...loadedEvents, newEvent] as event}
             {#if event && event.relativeStartTime !== undefined}
               <li
                 tabindex="0"
@@ -1544,7 +1537,7 @@
               </li>
             {/if}
           {/each}
-          {#if !hideCurrentTime}
+          {#if !_this.hide_current_time}
             <span class="now" style="top: {currentTimePosition()}%;">
               <svg
                 width="39"
@@ -1559,7 +1552,7 @@
               </svg>
             </span>
           {/if}
-        {:else if show_no_events_message && $EventStore[queryKey]}
+        {:else if _this.show_no_events_message && $EventStore[queryKey]}
           <li class="no-events">No events for {selectedDate.toDateString()}</li>
         {/if}
       </ul>
